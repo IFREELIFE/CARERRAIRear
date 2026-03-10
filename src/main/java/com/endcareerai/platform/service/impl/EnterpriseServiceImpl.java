@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -34,6 +34,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -163,9 +167,9 @@ public class EnterpriseServiceImpl implements EnterpriseService {
                 String newGapEntry;
                 try {
                     newGapEntry = objectMapper.writeValueAsString(
-                            java.util.Map.of(
+                            Map.of(
                                     "applicationId", applicationId,
-                                    "tags", request.getTags() != null ? request.getTags() : java.util.List.of(),
+                                    "tags", request.getTags() != null ? request.getTags() : Collections.emptyList(),
                                     "notes", request.getNotes() != null ? request.getNotes() : "",
                                     "timestamp", LocalDateTime.now().toString()
                             ));
@@ -177,9 +181,16 @@ public class EnterpriseServiceImpl implements EnterpriseService {
                 if (existingGap == null || existingGap.isBlank()) {
                     student.setGapJson("[" + newGapEntry + "]");
                 } else {
-                    // Append to existing JSON array
-                    student.setGapJson(
-                            existingGap.substring(0, existingGap.length() - 1) + "," + newGapEntry + "]");
+                    // Deserialize existing array, append new entry, serialize back
+                    try {
+                        List<?> gapList = objectMapper.readValue(existingGap, List.class);
+                        List<Object> mutableList = new ArrayList<>(gapList);
+                        mutableList.add(objectMapper.readValue(newGapEntry, Object.class));
+                        student.setGapJson(objectMapper.writeValueAsString(mutableList));
+                    } catch (JsonProcessingException ex) {
+                        log.warn("Existing gap_json is malformed, overwriting: {}", existingGap);
+                        student.setGapJson("[" + newGapEntry + "]");
+                    }
                 }
                 studentMapper.updateById(student);
 
@@ -191,15 +202,12 @@ public class EnterpriseServiceImpl implements EnterpriseService {
         log.info("Interview feedback submitted: applicationId={}, result={}", applicationId, request.getResult());
     }
 
+    private static final DataFormatter DATA_FORMATTER = new DataFormatter();
+
     private String getCellStringValue(Row row, int cellIndex) {
         Cell cell = row.getCell(cellIndex);
         if (cell == null) return null;
-        if (cell.getCellType() == CellType.STRING) {
-            return cell.getStringCellValue().trim();
-        }
-        if (cell.getCellType() == CellType.NUMERIC) {
-            return String.valueOf((long) cell.getNumericCellValue());
-        }
-        return null;
+        String value = DATA_FORMATTER.formatCellValue(cell).trim();
+        return value.isEmpty() ? null : value;
     }
 }

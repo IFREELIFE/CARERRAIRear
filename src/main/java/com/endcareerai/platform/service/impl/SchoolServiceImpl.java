@@ -51,10 +51,15 @@ public class SchoolServiceImpl implements SchoolService {
                 availableTimes.add(appointment.getAppointmentTime().toString());
             }
 
+            // Derive location from pending appointments if available
+            String location = pendingAppointments.isEmpty()
+                    ? null
+                    : pendingAppointments.get(0).getLocation();
+
             TeacherSlotResponse slot = new TeacherSlotResponse(
                     teacher.getId(),
                     teacher.getName(),
-                    teacher.getPhone(),
+                    location,
                     availableTimes);
             result.add(slot);
         }

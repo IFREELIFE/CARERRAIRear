@@ -154,7 +154,7 @@ public class StudentServiceImpl implements StudentService {
         application.setJobId(jobId);
         application.setEnterpriseId(job.getEnterpriseId());
         application.setIsAuthorized(request.isGrantAuthToEnterprise() ? 1 : 0);
-        application.setStatus("PENDING");
+        application.setStatus("APPLIED");
         application.setCreatedAt(LocalDateTime.now());
         jobApplicationMapper.insert(application);
 

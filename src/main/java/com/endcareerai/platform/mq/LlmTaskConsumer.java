@@ -1,8 +1,17 @@
 package com.endcareerai.platform.mq;
 
 import com.endcareerai.platform.common.Constants;
+import com.endcareerai.platform.entity.CounselingAppointment;
+import com.endcareerai.platform.entity.Job;
 import com.endcareerai.platform.entity.LlmTask;
+import com.endcareerai.platform.entity.Student;
+import com.endcareerai.platform.mapper.CounselingAppointmentMapper;
+import com.endcareerai.platform.mapper.JobMapper;
 import com.endcareerai.platform.mapper.LlmTaskMapper;
+import com.endcareerai.platform.mapper.StudentMapper;
+import com.endcareerai.platform.service.LlmService;
+import com.endcareerai.platform.service.RedisService;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.rabbitmq.client.Channel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +21,9 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -20,6 +31,11 @@ import java.time.LocalDateTime;
 public class LlmTaskConsumer {
 
     private final LlmTaskMapper llmTaskMapper;
+    private final JobMapper jobMapper;
+    private final StudentMapper studentMapper;
+    private final CounselingAppointmentMapper counselingAppointmentMapper;
+    private final LlmService llmService;
+    private final RedisService redisService;
 
     @RabbitListener(queues = Constants.MQ_QUEUE_LLM_TASK)
     public void processTask(LlmTaskMessage message, Channel channel,
@@ -76,43 +92,126 @@ public class LlmTaskConsumer {
     }
 
     /**
-     * Process job extraction from Excel data via LLM
-     * In production, this would call an LLM API to extract structured data from raw job descriptions
+     * 通过 LLM 从岗位原始描述中提取结构化画像
      */
     private void processJobExtraction(LlmTaskMessage message) {
-        log.info("Processing job extraction for targetId={}, prompt version={}",
-                message.getTargetId(), message.getPromptVersion());
-        // TODO: Integrate actual LLM API call for job data extraction
-        // This would:
-        // 1. Fetch the raw job description from jobs table
-        // 2. Send to LLM for structured extraction (skills, education, experience requirements)
-        // 3. Update jobs.ai_extracted_profile with the result
-        // 4. Set confidence_score
-        // 5. Update status to PENDING_REVIEW or ACTIVE
+        Long jobId = message.getTargetId();
+        log.info("Processing job extraction for jobId={}, prompt version={}", jobId, message.getPromptVersion());
+
+        Job job = jobMapper.selectById(jobId);
+        if (job == null) {
+            throw new RuntimeException("Job not found: " + jobId);
+        }
+
+        String rawDescription = job.getRawDescription();
+        if (rawDescription == null || rawDescription.isBlank()) {
+            throw new RuntimeException("Job raw description is empty for jobId=" + jobId);
+        }
+
+        // Call LLM to extract structured job profile
+        String extractedProfile = llmService.extractJobProfile(rawDescription, message.getCorrectionPrompt());
+
+        // Update job with AI-extracted profile
+        job.setAiExtractedProfile(extractedProfile);
+        job.setConfidenceScore(new BigDecimal("0.85"));
+        job.setStatus("ACTIVE");
+        jobMapper.updateById(job);
+
+        // Invalidate cache
+        redisService.delete(Constants.REDIS_JOB_PREFIX + jobId);
+
+        log.info("Job extraction completed: jobId={}, profileLength={}", jobId, extractedProfile.length());
     }
 
     /**
-     * Generate student 12-dimension profile via LLM
+     * 通过 LLM 根据学生技能和 MBTI 生成12维能力画像
      */
     private void processStudentProfile(LlmTaskMessage message) {
-        log.info("Generating student profile for targetId={}", message.getTargetId());
-        // TODO: Integrate actual LLM API call for student profile generation
-        // This would:
-        // 1. Fetch student's tech_skills_raw and mbti_result
-        // 2. Send to LLM to generate 12-dimension radar chart data
-        // 3. Update students.ai_12_dim_radar with JSON result
+        Long studentId = message.getTargetId();
+        log.info("Generating student profile for studentId={}", studentId);
+
+        Student student = studentMapper.selectById(studentId);
+        if (student == null) {
+            throw new RuntimeException("Student not found: " + studentId);
+        }
+
+        String techSkills = student.getTechSkillsRaw();
+        String mbtiResult = student.getMbtiResult();
+        if (techSkills == null || techSkills.isBlank()) {
+            throw new RuntimeException("Student tech skills are empty for studentId=" + studentId);
+        }
+
+        // Call LLM to generate 12-dimension radar profile
+        String radarProfile = llmService.generateStudentProfile(techSkills, mbtiResult, message.getCorrectionPrompt());
+
+        // Update student with AI-generated 12-dim radar
+        student.setAi12DimRadar(radarProfile);
+        studentMapper.updateById(student);
+
+        // Invalidate cache
+        redisService.delete(Constants.REDIS_USER_PREFIX + studentId);
+
+        log.info("Student profile generated: studentId={}, radarLength={}", studentId, radarProfile.length());
     }
 
     /**
-     * Re-calculate student profile with RAG (teacher evaluation feedback)
+     * 结合教师评价反馈通过 LLM + RAG 重新计算学生画像
      */
     private void processRagRecalculate(LlmTaskMessage message) {
-        log.info("Processing RAG recalculate for targetId={}", message.getTargetId());
-        // TODO: Integrate actual LLM + RAG pipeline
-        // This would:
-        // 1. Retrieve teacher evaluations from vector DB
-        // 2. Combine with existing student profile
-        // 3. Re-evaluate soft skill scores via LLM
-        // 4. Update students.ai_12_dim_radar
+        Long studentId = message.getTargetId();
+        log.info("Processing RAG recalculate for studentId={}", studentId);
+
+        Student student = studentMapper.selectById(studentId);
+        if (student == null) {
+            throw new RuntimeException("Student not found: " + studentId);
+        }
+
+        String currentRadar = student.getAi12DimRadar();
+        if (currentRadar == null || currentRadar.isBlank()) {
+            throw new RuntimeException("Student has no existing radar profile for studentId=" + studentId);
+        }
+
+        // Retrieve the latest teacher evaluation for this student
+        List<CounselingAppointment> completedAppointments = counselingAppointmentMapper.selectList(
+                new QueryWrapper<CounselingAppointment>()
+                        .eq("student_id", studentId)
+                        .eq("status", "COMPLETED")
+                        .eq("is_rag_processed", 0)
+                        .orderByDesc("appointment_time"));
+
+        StringBuilder feedbackBuilder = new StringBuilder();
+        for (CounselingAppointment appointment : completedAppointments) {
+            if (appointment.getTeacherEvaluation() != null) {
+                feedbackBuilder.append("评价: ").append(appointment.getTeacherEvaluation());
+                if (appointment.getTeacherTags() != null) {
+                    feedbackBuilder.append(" 标签: ").append(appointment.getTeacherTags());
+                }
+                feedbackBuilder.append("\n");
+            }
+        }
+
+        String teacherFeedback = feedbackBuilder.toString();
+        if (teacherFeedback.isBlank()) {
+            log.info("No unprocessed teacher feedback for studentId={}", studentId);
+            return;
+        }
+
+        // Call LLM to recalculate profile with teacher feedback
+        String updatedRadar = llmService.ragRecalculateProfile(currentRadar, teacherFeedback, message.getCorrectionPrompt());
+
+        // Update student radar
+        student.setAi12DimRadar(updatedRadar);
+        studentMapper.updateById(student);
+
+        // Mark appointments as RAG processed
+        for (CounselingAppointment appointment : completedAppointments) {
+            appointment.setIsRagProcessed(1);
+            counselingAppointmentMapper.updateById(appointment);
+        }
+
+        // Invalidate cache
+        redisService.delete(Constants.REDIS_USER_PREFIX + studentId);
+
+        log.info("RAG recalculate completed: studentId={}, feedbackCount={}", studentId, completedAppointments.size());
     }
 }

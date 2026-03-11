@@ -70,6 +70,16 @@ jwt:
   secret: EndCareerAi2026SecretKeyForJwtTokenGenerationMustBeLongEnough256Bits!!
   expiration: 86400000
 
+# LLM (OpenAI 兼容接口，支持 OpenAI / DeepSeek / 通义千问等)
+llm:
+  base-url: https://api.openai.com          # LLM API 基础地址，可替换为其他兼容接口
+  api-key: ${LLM_API_KEY:sk-your-api-key}   # API 密钥，建议通过环境变量 LLM_API_KEY 注入
+  model: gpt-3.5-turbo                       # 模型名称
+  temperature: 0.3                           # 生成温度，越低越确定性
+  max-tokens: 2000                           # 最大生成 token 数
+  connect-timeout: 10                        # 连接超时（秒）
+  read-timeout: 60                           # 读取超时（秒）
+
 # Logging
 logging:
   level:

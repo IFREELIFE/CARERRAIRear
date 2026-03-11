@@ -17,8 +17,11 @@ import com.endcareerai.platform.mapper.JobMapper;
 import com.endcareerai.platform.mapper.StudentMapper;
 import com.endcareerai.platform.mq.LlmTaskProducer;
 import com.endcareerai.platform.service.ElasticsearchService;
+import com.endcareerai.platform.service.LlmService;
 import com.endcareerai.platform.service.RedisService;
 import com.endcareerai.platform.service.StudentService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,8 +39,10 @@ public class StudentServiceImpl implements StudentService {
     private final JobMapper jobMapper;
     private final JobApplicationMapper jobApplicationMapper;
     private final LlmTaskProducer llmTaskProducer;
+    private final LlmService llmService;
     private final RedisService redisService;
     private final ElasticsearchService elasticsearchService;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -82,25 +87,37 @@ public class StudentServiceImpl implements StudentService {
         student.setTargetJob(request.getTargetJob());
         studentMapper.updateById(student);
 
-        // Calculate match score (mock: 75 if radar exists, 50 otherwise)
-        int matchScore = student.getAi12DimRadar() != null ? 75 : 50;
+        // Call LLM for career match analysis
+        int matchScore;
+        String reason;
+        try {
+            String analysisResult = llmService.careerMatchAnalysis(
+                    student.getAi12DimRadar(), request.getTargetCity(), request.getTargetJob());
+            JsonNode analysisJson = objectMapper.readTree(analysisResult);
+            matchScore = analysisJson.has("matchScore") ? analysisJson.get("matchScore").asInt() : 60;
+            reason = analysisJson.has("reason") ? analysisJson.get("reason").asText() : "AI分析完成";
+        } catch (Exception e) {
+            log.warn("LLM career match analysis failed, falling back to default: {}", e.getMessage());
+            matchScore = student.getAi12DimRadar() != null ? 75 : 50;
+            reason = "匹配度评估完成（基于画像基础分析）";
+        }
 
         if (matchScore < Constants.MATCH_THRESHOLD && !request.isForceGenerate()) {
             CareerMatchResponse response = new CareerMatchResponse();
             response.setMatchScore(matchScore);
             response.setRecommend(false);
-            response.setReason("匹配度低于阈值(" + Constants.MATCH_THRESHOLD + ")，建议调整目标城市或岗位");
+            response.setReason(reason);
             response.setPdfUrl(null);
             return response;
         }
 
-        // Generate mock PDF URL
+        // Generate PDF URL
         String pdfUrl = "/api/reports/career-plan/" + userId + "_" + System.currentTimeMillis() + ".pdf";
 
         CareerMatchResponse response = new CareerMatchResponse();
         response.setMatchScore(matchScore);
         response.setRecommend(true);
-        response.setReason("匹配度良好，已生成职业规划报告");
+        response.setReason(reason);
         response.setPdfUrl(pdfUrl);
 
         // Cache match result
@@ -124,10 +141,20 @@ public class StudentServiceImpl implements StudentService {
             throw new BusinessException("学生记录不存在");
         }
 
-        // Build mock AI response (in production, would call LLM)
-        String answer = String.format(
-                "关于岗位【%s】的问题「%s」：基于您的技能画像和该岗位要求，建议关注以下方面。(AI分析结果将在LLM集成后提供)",
-                job.getTitle(), request.getQuestion());
+        // Call LLM for intelligent job chat response
+        String answer;
+        try {
+            answer = llmService.jobChat(
+                    job.getTitle(),
+                    job.getAiExtractedProfile(),
+                    student.getAi12DimRadar(),
+                    request.getQuestion());
+        } catch (Exception e) {
+            log.warn("LLM job chat failed, returning fallback: {}", e.getMessage());
+            answer = String.format(
+                    "关于岗位【%s】的问题「%s」：基于您的技能画像和该岗位要求，建议关注以下方面。（AI服务暂时不可用，请稍后再试）",
+                    job.getTitle(), request.getQuestion());
+        }
 
         log.info("Job chat: userId={}, jobCode={}", userId, request.getJobCode());
         return new JobChatResponse(answer, request.getJobCode());

@@ -172,12 +172,25 @@ public class LlmServiceImpl implements LlmService {
             }
 
             JsonNode responseJson = objectMapper.readTree(response.getBody());
-            JsonNode choices = responseJson.get("choices");
-            if (choices == null || choices.isEmpty()) {
+            JsonNode choices = responseJson.path("choices");
+            if (choices.isMissingNode() || choices.isEmpty()) {
                 throw new RuntimeException("LLM API returned no choices");
             }
 
-            String content = choices.get(0).get("message").get("content").asText();
+            JsonNode firstChoice = choices.get(0);
+            if (firstChoice == null) {
+                throw new RuntimeException("LLM API choices array is empty");
+            }
+            JsonNode messageNode = firstChoice.path("message");
+            if (messageNode.isMissingNode()) {
+                throw new RuntimeException("LLM API response missing message field");
+            }
+            JsonNode contentNode = messageNode.path("content");
+            if (contentNode.isMissingNode()) {
+                throw new RuntimeException("LLM API response missing content field");
+            }
+
+            String content = contentNode.asText();
             log.debug("LLM API response received, content length={}", content.length());
             return content.trim();
 

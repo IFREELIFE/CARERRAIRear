@@ -9,6 +9,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * Elasticsearch 搜索服务
+ * 负责岗位文档的索引同步、删除和全文检索，
+ * 支持按关键词搜索（标题/地点）、按状态过滤和按地点筛选
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -17,7 +22,10 @@ public class ElasticsearchService {
     private final JobDocumentRepository jobDocumentRepository;
 
     /**
-     * Sync a job entity to Elasticsearch
+     * 将岗位实体同步到 Elasticsearch 索引
+     * 用于岗位创建、更新后的搜索数据同步
+     *
+     * @param job 岗位实体对象
      */
     public void syncJobToEs(Job job) {
         JobDocument doc = new JobDocument();
@@ -35,7 +43,10 @@ public class ElasticsearchService {
     }
 
     /**
-     * Remove a job from Elasticsearch
+     * 从 Elasticsearch 索引中删除指定岗位
+     * 用于岗位关闭/下架时移除搜索数据
+     *
+     * @param jobId 岗位ID
      */
     public void removeJobFromEs(Long jobId) {
         jobDocumentRepository.deleteById(jobId);
@@ -43,21 +54,30 @@ public class ElasticsearchService {
     }
 
     /**
-     * Search jobs by keyword (matches title or location)
+     * 按关键词搜索岗位（匹配标题或工作地点）
+     * 基于 Elasticsearch 全文检索，支持中文分词（ik_max_word / ik_smart）
+     *
+     * @param keyword 搜索关键词
+     * @return 匹配的岗位文档列表
      */
     public List<JobDocument> searchJobs(String keyword) {
         return jobDocumentRepository.findByTitleContainingOrLocationContaining(keyword, keyword);
     }
 
     /**
-     * Search active jobs by location
+     * 按地点搜索状态为 ACTIVE 的岗位
+     *
+     * @param location 工作地点
+     * @return 匹配的 ACTIVE 状态岗位文档列表
      */
     public List<JobDocument> searchActiveJobsByLocation(String location) {
         return jobDocumentRepository.findByLocationAndStatus(location, "ACTIVE");
     }
 
     /**
-     * Get all active jobs
+     * 获取所有状态为 ACTIVE 的上架岗位
+     *
+     * @return ACTIVE 状态的岗位文档列表
      */
     public List<JobDocument> getActiveJobs() {
         return jobDocumentRepository.findByStatus("ACTIVE");

@@ -15,6 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * 管理端服务实现类
+ * 提供 LLMOps 任务监控仪表盘数据查询和失败任务人工纠偏重试
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -23,6 +27,13 @@ public class AdminServiceImpl implements AdminService {
     private final LlmTaskMapper llmTaskMapper;
     private final LlmTaskProducer llmTaskProducer;
 
+    /**
+     * 获取 AI 异步任务统计信息
+     * 分别统计 QUEUED、PROCESSING、SUCCESS、FAILED 四种状态的任务数量，
+     * 并返回最近100条任务记录用于仪表盘展示
+     *
+     * @return 任务统计响应（含各状态计数和最近任务列表）
+     */
     @Override
     public LlmTaskStatsResponse getTaskStats() {
         long queued = llmTaskMapper.selectCount(
@@ -42,6 +53,13 @@ public class AdminServiceImpl implements AdminService {
         return new LlmTaskStatsResponse(queued, processing, success, failed, tasks);
     }
 
+    /**
+     * 人工纠偏精准重试失败任务
+     * 校验任务存在且状态为 FAILED 后，将修正提示和部分重试字段信息重新推入 MQ 队列
+     *
+     * @param taskId  任务ID
+     * @param request 重试请求（包含修正提示和部分重试字段）
+     */
     @Override
     @Transactional
     public void retryTask(String taskId, TaskRetryRequest request) {

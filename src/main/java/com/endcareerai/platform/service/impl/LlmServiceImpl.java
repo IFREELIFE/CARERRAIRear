@@ -26,9 +26,11 @@ public class LlmServiceImpl implements LlmService {
     private final RestTemplate llmRestTemplate;
     private final ObjectMapper objectMapper;
 
+    // TODO: 请修改为你的 LLM API 基础地址（支持 OpenAI / DeepSeek / 通义千问等兼容接口）
     @Value("${llm.base-url:https://api.openai.com}")
     private String baseUrl;
 
+    // TODO: 请修改为你要使用的 LLM 模型名称
     @Value("${llm.model:gpt-3.5-turbo}")
     private String model;
 
@@ -38,12 +40,26 @@ public class LlmServiceImpl implements LlmService {
     @Value("${llm.max-tokens:2000}")
     private int maxTokens;
 
+    /**
+     * 构造方法，注入 LLM 专用的 RestTemplate 和 JSON 序列化工具
+     *
+     * @param llmRestTemplate LLM 专用的 RestTemplate（由 LlmConfig 创建）
+     * @param objectMapper    JSON 序列化/反序列化工具
+     */
     public LlmServiceImpl(@Qualifier("llmRestTemplate") RestTemplate llmRestTemplate,
                            ObjectMapper objectMapper) {
         this.llmRestTemplate = llmRestTemplate;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 从岗位原始描述中提取结构化画像（技能要求、学历、经验等）
+     * 通过 System Prompt 指引 LLM 输出标准 JSON 格式
+     *
+     * @param rawDescription   岗位原始描述
+     * @param correctionPrompt 可选的人工修正提示（重试时使用）
+     * @return JSON 格式的结构化岗位画像
+     */
     @Override
     public String extractJobProfile(String rawDescription, String correctionPrompt) {
         String systemPrompt = "你是一个专业的岗位信息提取助手。请从岗位描述中提取结构化信息，以JSON格式返回。"
@@ -61,6 +77,15 @@ public class LlmServiceImpl implements LlmService {
         return callLlmApi(systemPrompt, userPrompt);
     }
 
+    /**
+     * 根据学生技能和 MBTI 生成12维能力雷达图数据
+     * 12维度包括：编程、算法、系统设计、沟通、团队协作、领导力、学习力、问题解决、创新、抗压、时间管理、职业素养
+     *
+     * @param techSkills       技术技能原始文本
+     * @param mbtiResult       MBTI 测试结果
+     * @param correctionPrompt 可选的人工修正提示
+     * @return JSON 格式的12维雷达图数据
+     */
     @Override
     public String generateStudentProfile(String techSkills, String mbtiResult, String correctionPrompt) {
         String systemPrompt = "你是一个专业的职业能力评估师。请根据学生的技术技能和MBTI性格类型，生成12维能力雷达图数据。"
@@ -80,6 +105,15 @@ public class LlmServiceImpl implements LlmService {
         return callLlmApi(systemPrompt, userPrompt);
     }
 
+    /**
+     * 结合教师评价反馈重新计算学生画像（RAG 反哺流程）
+     * 教师反馈权重合理融入，不会大幅偏离原始评分
+     *
+     * @param currentRadar     当前12维画像 JSON
+     * @param teacherFeedback  教师评价内容
+     * @param correctionPrompt 可选的人工修正提示
+     * @return 更新后的12维雷达图 JSON
+     */
     @Override
     public String ragRecalculateProfile(String currentRadar, String teacherFeedback, String correctionPrompt) {
         String systemPrompt = "你是一个专业的职业能力评估师。请根据教师的评价反馈，结合学生当前的12维能力画像，"
@@ -99,6 +133,16 @@ public class LlmServiceImpl implements LlmService {
         return callLlmApi(systemPrompt, userPrompt);
     }
 
+    /**
+     * 岗位详情页 AI Agent 智能问答
+     * 将岗位画像和学生画像作为上下文注入 LLM，针对性回答学生提问
+     *
+     * @param jobTitle     岗位名称
+     * @param jobProfile   岗位 AI 提取画像
+     * @param studentRadar 学生12维画像
+     * @param question     用户提问
+     * @return AI 回答内容
+     */
     @Override
     public String jobChat(String jobTitle, String jobProfile, String studentRadar, String question) {
         String systemPrompt = "你是EndCareerAi智能求职助手，帮助学生了解岗位信息并提供求职建议。"
@@ -118,6 +162,15 @@ public class LlmServiceImpl implements LlmService {
         return callLlmApi(systemPrompt, userPrompt.toString());
     }
 
+    /**
+     * 职业匹配度分析
+     * 对比学生12维画像与目标岗位要求，返回匹配分数和详细分析
+     *
+     * @param studentRadar 学生12维画像 JSON
+     * @param targetCity   目标城市
+     * @param targetJob    目标岗位
+     * @return JSON 格式的匹配分析结果
+     */
     @Override
     public String careerMatchAnalysis(String studentRadar, String targetCity, String targetJob) {
         String systemPrompt = "你是一个专业的职业匹配分析师。请根据学生的12维能力画像和目标岗位，"
@@ -135,6 +188,12 @@ public class LlmServiceImpl implements LlmService {
 
     /**
      * 调用 LLM API（OpenAI Chat Completions 兼容接口）
+     * 构造请求体包含 model、temperature、max_tokens 和 messages，
+     * 解析返回的 choices[0].message.content 作为结果
+     *
+     * @param systemPrompt 系统提示（指导 LLM 角色和输出格式）
+     * @param userPrompt   用户提示（具体任务内容）
+     * @return LLM 回答内容
      */
     private String callLlmApi(String systemPrompt, String userPrompt) {
         String url = baseUrl + "/v1/chat/completions";

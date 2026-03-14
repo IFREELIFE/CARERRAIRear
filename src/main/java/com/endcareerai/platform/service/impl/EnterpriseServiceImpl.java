@@ -39,6 +39,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 企业服务实现类
+ * 实现岗位 Excel 批量导入、岗位关闭和面试反馈（自愈闭环）逻辑
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -54,6 +58,17 @@ public class EnterpriseServiceImpl implements EnterpriseService {
     private final RedisService redisService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 批量导入岗位 Excel 表格
+     * 处理流程：
+     * 1. 校验企业信息存在
+     * 2. 逐行解析 Excel（跳过表头），按 job_code 去重
+     * 3. 每个岗位入库（状态为 PENDING_AI），推送 EXTRACT_JOB_XLS 任务到 MQ
+     * 4. 同步岗位到 Elasticsearch（后续 LLM 处理完成后再次同步为 ACTIVE）
+     *
+     * @param enterpriseUserId 企业用户ID
+     * @param file             Excel 文件
+     */
     @Override
     @Transactional
     public void importJobsExcel(Long enterpriseUserId, MultipartFile file) {
@@ -110,6 +125,12 @@ public class EnterpriseServiceImpl implements EnterpriseService {
         }
     }
 
+    /**
+     * 关闭/下架招聘岗位
+     * 将岗位状态从 ACTIVE 改为 CLOSED，从 Elasticsearch 中移除该岗位，并清除 Redis 缓存
+     *
+     * @param jobId 岗位ID
+     */
     @Override
     @Transactional
     public void closeJob(Long jobId) {
@@ -133,6 +154,17 @@ public class EnterpriseServiceImpl implements EnterpriseService {
         log.info("Job closed: jobId={}", jobId);
     }
 
+    /**
+     * 提交真实面试反馈（自愈闭环核心）
+     * 处理流程：
+     * 1. 校验投递记录存在
+     * 2. 创建面试反馈记录，保存结果、标签和备注
+     * 3. 若结果为 FAIL，自动将 HR 的标签和备注追加到学生的 Gap_JSON（匹配差距清单）
+     * 4. 标记反馈已同步给 AI 系统
+     *
+     * @param applicationId 投递申请ID
+     * @param request       包含面试结果（PASS/FAIL）、标签和备注的请求体
+     */
     @Override
     @Transactional
     public void submitInterviewFeedback(Long applicationId, InterviewFeedbackRequest request) {
@@ -204,6 +236,13 @@ public class EnterpriseServiceImpl implements EnterpriseService {
 
     private static final DataFormatter DATA_FORMATTER = new DataFormatter();
 
+    /**
+     * 从 Excel 行中提取指定列的字符串值
+     *
+     * @param row       Excel 行对象
+     * @param cellIndex 列索引（从0开始）
+     * @return 单元格字符串值，空值返回 null
+     */
     private String getCellStringValue(Row row, int cellIndex) {
         Cell cell = row.getCell(cellIndex);
         if (cell == null) return null;

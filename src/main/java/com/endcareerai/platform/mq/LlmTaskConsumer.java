@@ -9,6 +9,7 @@ import com.endcareerai.platform.mapper.CounselingAppointmentMapper;
 import com.endcareerai.platform.mapper.JobMapper;
 import com.endcareerai.platform.mapper.LlmTaskMapper;
 import com.endcareerai.platform.mapper.StudentMapper;
+import com.endcareerai.platform.service.ElasticsearchService;
 import com.endcareerai.platform.service.LlmService;
 import com.endcareerai.platform.service.RedisService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -25,6 +26,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * RabbitMQ 消费者 —— 异步处理 LLM 任务
+ * 监听 llm.task.queue 队列，根据任务类型分发到对应处理方法，
+ * 支持岗位画像提取、学生画像生成、RAG反哺重算三种任务类型
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -35,8 +41,18 @@ public class LlmTaskConsumer {
     private final StudentMapper studentMapper;
     private final CounselingAppointmentMapper counselingAppointmentMapper;
     private final LlmService llmService;
+    private final ElasticsearchService elasticsearchService;
     private final RedisService redisService;
 
+    /**
+     * 监听 RabbitMQ 队列，接收并处理 LLM 异步任务消息
+     * 处理流程：更新任务状态为 PROCESSING → 根据类型分发处理 → 标记 SUCCESS/FAILED
+     * 使用手动 ACK 模式确保消息可靠消费
+     *
+     * @param message     MQ 消息体，包含任务ID、类型、目标ID等
+     * @param channel     RabbitMQ Channel，用于手动确认/拒绝消息
+     * @param deliveryTag 消息投递标签，用于 ACK/NACK
+     */
     @RabbitListener(queues = Constants.MQ_QUEUE_LLM_TASK)
     public void processTask(LlmTaskMessage message, Channel channel,
                             @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
@@ -92,7 +108,11 @@ public class LlmTaskConsumer {
     }
 
     /**
-     * 通过 LLM 从岗位原始描述中提取结构化画像
+     * 处理岗位画像提取任务（EXTRACT_JOB_XLS）
+     * 从岗位原始描述中通过 LLM 提取结构化画像信息（技能要求、学历、经验等），
+     * 更新岗位状态为 ACTIVE 并同步到 Elasticsearch 使其可被搜索
+     *
+     * @param message MQ 消息体，包含 targetId（即 job_id）和可选的修正提示
      */
     private void processJobExtraction(LlmTaskMessage message) {
         Long jobId = message.getTargetId();
@@ -117,6 +137,9 @@ public class LlmTaskConsumer {
         job.setStatus("ACTIVE");
         jobMapper.updateById(job);
 
+        // Sync updated job to Elasticsearch so it can be searched as ACTIVE
+        elasticsearchService.syncJobToEs(job);
+
         // Invalidate cache
         redisService.delete(Constants.REDIS_JOB_PREFIX + jobId);
 
@@ -124,7 +147,11 @@ public class LlmTaskConsumer {
     }
 
     /**
-     * 通过 LLM 根据学生技能和 MBTI 生成12维能力画像
+     * 处理学生画像生成任务（GEN_STUDENT_PROFILE）
+     * 根据学生填写的技术技能和 MBTI 类型，通过 LLM 生成12维能力雷达图数据，
+     * 12个维度包括：编程能力、算法、系统设计、沟通、团队协作、领导力等
+     *
+     * @param message MQ 消息体，包含 targetId（即 student_id / user_id）和可选的修正提示
      */
     private void processStudentProfile(LlmTaskMessage message) {
         Long studentId = message.getTargetId();
@@ -155,7 +182,12 @@ public class LlmTaskConsumer {
     }
 
     /**
-     * 结合教师评价反馈通过 LLM + RAG 重新计算学生画像
+     * 处理 RAG 反哺重算任务（RAG_RECALCULATE）
+     * 收集该学生所有未处理的教师辅导评价，结合当前12维画像，
+     * 通过 LLM + RAG 流程重新评估并微调学生的软技能得分（如沟通、抗压等），
+     * 处理完成后标记相关预约记录为已反哺
+     *
+     * @param message MQ 消息体，包含 targetId（即 student_id）和可选的修正提示
      */
     private void processRagRecalculate(LlmTaskMessage message) {
         Long studentId = message.getTargetId();

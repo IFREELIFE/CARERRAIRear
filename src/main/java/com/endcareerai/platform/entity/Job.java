@@ -10,6 +10,9 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 岗位表实体（jobs），存储企业发布的岗位信息、AI提取的结构化画像和置信度分数
+ */
 @Data
 @TableName(value = "jobs", autoResultMap = true)
 public class Job {

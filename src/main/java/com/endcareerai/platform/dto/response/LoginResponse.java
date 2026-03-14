@@ -4,6 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * 登录响应DTO，包含JWT Token、角色和用户ID
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

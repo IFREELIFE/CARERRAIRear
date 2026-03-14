@@ -6,6 +6,9 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 企业表实体（enterprises），存储企业的公司名称、统一社会信用代码和审核状态
+ */
 @Data
 @TableName("enterprises")
 public class Enterprise {

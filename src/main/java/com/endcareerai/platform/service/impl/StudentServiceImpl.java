@@ -30,6 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 学生服务实现类
+ * 实现学生端核心业务逻辑，包括档案初始化、职业匹配、AI 问答和岗位投递
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -44,6 +48,18 @@ public class StudentServiceImpl implements StudentService {
     private final ElasticsearchService elasticsearchService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 初始化学生档案（技术技能 + MBTI）
+     * 处理流程：
+     * 1. 校验信息保证书确认状态
+     * 2. 获取或创建学生记录
+     * 3. 保存技术技能和 MBTI 结果
+     * 4. 推送 GEN_STUDENT_PROFILE 任务到 MQ 由 LLM 异步生成12维画像
+     * 5. 清除用户缓存
+     *
+     * @param userId  当前用户ID
+     * @param request 包含技术技能、MBTI 结果和保证确认的请求体
+     */
     @Override
     @Transactional
     public void initProfile(Long userId, ProfileInitRequest request) {
@@ -72,6 +88,20 @@ public class StudentServiceImpl implements StudentService {
         log.info("Student profile initialized: userId={}", userId);
     }
 
+    /**
+     * 目标职业匹配与 PDF 规划方案生成
+     * 处理流程：
+     * 1. 校验学生记录及12维画像是否已生成
+     * 2. 更新学生的目标城市和职业偏好
+     * 3. 调用 LLM 进行职业匹配度分析
+     * 4. 若匹配度 < 70% 且未强制生成，则拦截返回原因
+     * 5. 否则生成个性化职业规划 PDF 下载链接
+     * 6. 缓存匹配结果到 Redis
+     *
+     * @param userId  当前用户ID
+     * @param request 包含目标城市、目标岗位和是否强制生成的请求体
+     * @return 匹配结果响应（含分数、推荐状态、原因和 PDF 链接）
+     */
     @Override
     public CareerMatchResponse matchAndPlan(Long userId, CareerMatchRequest request) {
         Student student = studentMapper.selectById(userId);
@@ -128,6 +158,19 @@ public class StudentServiceImpl implements StudentService {
         return response;
     }
 
+    /**
+     * 岗位详情页 AI Agent 智能问答
+     * 处理流程：
+     * 1. 根据岗位编码查询岗位信息
+     * 2. 查询学生12维画像
+     * 3. 将岗位画像和学生画像作为上下文注入 LLM
+     * 4. LLM 生成针对性回答（如"是否胜任"、"需要学什么"等）
+     * 5. 若 LLM 调用失败则返回兜底回答
+     *
+     * @param userId  当前用户ID
+     * @param request 包含岗位编码和用户提问的请求体
+     * @return AI 回答响应
+     */
     @Override
     public JobChatResponse jobChat(Long userId, JobChatRequest request) {
         Job job = jobMapper.selectOne(
@@ -160,6 +203,19 @@ public class StudentServiceImpl implements StudentService {
         return new JobChatResponse(answer, request.getJobCode());
     }
 
+    /**
+     * 岗位投递与企业授权
+     * 处理流程：
+     * 1. 校验岗位存在且状态为 ACTIVE
+     * 2. 校验学生记录存在
+     * 3. 创建投递记录，根据学生授权意愿设置 is_authorized
+     * 4. 同步岗位信息到 Elasticsearch
+     *
+     * @param userId  当前用户ID
+     * @param jobId   岗位ID
+     * @param request 包含是否授权企业查看画像的请求体
+     * @return 投递记录
+     */
     @Override
     @Transactional
     public JobApplication applyJob(Long userId, Long jobId, JobApplyRequest request) {

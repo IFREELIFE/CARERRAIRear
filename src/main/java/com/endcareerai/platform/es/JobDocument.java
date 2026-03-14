@@ -6,6 +6,9 @@ import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
+/**
+ * Elasticsearch 岗位文档实体，映射到 "jobs" 索引，支持中文分词搜索
+ */
 @Data
 @Document(indexName = "jobs")
 public class JobDocument {

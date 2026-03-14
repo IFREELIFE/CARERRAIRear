@@ -23,6 +23,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 学校服务实现类
+ * 实现辅导老师时间段查询和辅导评价提交（触发 RAG 反哺）逻辑
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,6 +38,17 @@ public class SchoolServiceImpl implements SchoolService {
     private final RedisService redisService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 获取指定学校的可用辅导老师与时间段
+     * 处理流程：
+     * 1. 查询该学校下所有辅导老师
+     * 2. 对每位老师查询 PENDING 状态的预约记录
+     * 3. 提取可用时间段和指导地点
+     * 4. 缓存结果到 Redis（15分钟过期）
+     *
+     * @param schoolUserId 学校用户ID
+     * @return 辅导老师可用时间段列表
+     */
     @Override
     public List<TeacherSlotResponse> getAvailableSlots(Long schoolUserId) {
         List<Teacher> teachers = teacherMapper.selectList(
@@ -72,6 +87,17 @@ public class SchoolServiceImpl implements SchoolService {
         return result;
     }
 
+    /**
+     * 老师提交辅导纪要与评价（触发 RAG 反哺）
+     * 处理流程：
+     * 1. 校验咨询预约记录存在
+     * 2. 设置评价内容和标签，更新预约状态为 COMPLETED
+     * 3. 标记 is_rag_processed = 0 等待 RAG 处理
+     * 4. 推送 RAG_RECALCULATE 任务到 MQ，由 LLM 异步重算学生画像
+     *
+     * @param appointmentId 咨询预约ID
+     * @param request       包含标签和辅导纪要的请求体
+     */
     @Override
     @Transactional
     public void evaluateAppointment(Long appointmentId, AppointmentEvaluateRequest request) {

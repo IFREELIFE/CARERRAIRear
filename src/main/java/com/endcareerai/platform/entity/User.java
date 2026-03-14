@@ -8,6 +8,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户表实体（users），存储所有平台用户的账号、密码和角色信息
+ */
 @Data
 @TableName("users")
 public class User {

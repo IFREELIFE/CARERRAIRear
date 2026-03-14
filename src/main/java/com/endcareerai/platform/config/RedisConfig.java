@@ -7,9 +7,20 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+/**
+ * Redis 配置类
+ * 配置 RedisTemplate 的键值序列化方式，键使用 String 序列化，值使用 JSON 序列化
+ */
 @Configuration
 public class RedisConfig {
 
+    /**
+     * 配置 RedisTemplate
+     * Key 使用 StringRedisSerializer，Value 使用 GenericJackson2JsonRedisSerializer
+     *
+     * @param factory Redis 连接工厂
+     * @return RedisTemplate 实例
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();

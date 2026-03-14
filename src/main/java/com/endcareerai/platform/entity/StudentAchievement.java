@@ -8,6 +8,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 学生成就表实体（student_achievements），记录学生获得的证书、奖项、项目经历等成就信息
+ */
 @Data
 @TableName("student_achievements")
 public class StudentAchievement {

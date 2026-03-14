@@ -8,6 +8,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 投递申请表实体（job_applications），记录学生投递岗位的记录和企业画像授权状态
+ */
 @Data
 @TableName("job_applications")
 public class JobApplication {

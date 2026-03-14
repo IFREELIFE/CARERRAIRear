@@ -9,6 +9,9 @@ import lombok.Data;
 
 import java.time.LocalDate;
 
+/**
+ * 学生档案表实体（students），存储学生的技术技能、MBTI、AI生成的12维画像和匹配差距信息
+ */
 @Data
 @TableName(value = "students", autoResultMap = true)
 public class Student {

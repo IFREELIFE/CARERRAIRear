@@ -8,6 +8,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * LLM异步任务表实体（llm_tasks），记录所有发送到MQ的AI任务状态和执行日志
+ */
 @Data
 @TableName("llm_tasks")
 public class LlmTask {

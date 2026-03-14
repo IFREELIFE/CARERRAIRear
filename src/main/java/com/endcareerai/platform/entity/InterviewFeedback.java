@@ -9,6 +9,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 面试反馈表实体（interview_feedbacks），存储企业HR录入的面试结果和标签反馈
+ */
 @Data
 @TableName(value = "interview_feedbacks", autoResultMap = true)
 public class InterviewFeedback {

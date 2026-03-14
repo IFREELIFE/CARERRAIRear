@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * LLM任务统计响应DTO，包含各状态任务计数和最近任务列表
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

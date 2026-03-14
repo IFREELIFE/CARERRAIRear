@@ -9,6 +9,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 辅导预约表实体（counseling_appointments），记录学生与老师的辅导预约及评价反馈
+ */
 @Data
 @TableName(value = "counseling_appointments", autoResultMap = true)
 public class CounselingAppointment {

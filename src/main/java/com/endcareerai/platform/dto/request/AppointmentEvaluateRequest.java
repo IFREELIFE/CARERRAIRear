@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 辅导评价请求DTO，包含评价标签和教师辅导纪要
+ */
 @Data
 public class AppointmentEvaluateRequest {
     private List<String> tags;

@@ -42,6 +42,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/register", "/auth/login", "/auth/refresh").permitAll()
+                .requestMatchers("/auth/logout", "/auth/change-password").authenticated()
                 .requestMatchers("/jobs/**").hasRole("ENTERPRISE")
                 .requestMatchers("/student/**").hasRole("STUDENT")
                 .requestMatchers("/school/**").hasAnyRole("SCHOOL", "STUDENT")

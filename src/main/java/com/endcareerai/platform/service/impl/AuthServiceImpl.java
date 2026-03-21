@@ -20,6 +20,7 @@ import com.endcareerai.platform.service.AuthService;
 import com.endcareerai.platform.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,10 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisService redisService;
+    @Value("${jwt.expiration}")
+    private long accessTokenExpiration;
+    @Value("${jwt.refresh-expiration:604800000}")
+    private long refreshTokenExpiration;
 
     /**
      * 多平台账号注册
@@ -114,10 +119,10 @@ public class AuthServiceImpl implements AuthService {
 
         // Cache user info in Redis
         redisService.set(Constants.REDIS_USER_PREFIX + user.getId(), user, 30, TimeUnit.MINUTES);
-        redisService.set(Constants.REDIS_REFRESH_TOKEN_PREFIX + user.getId(), tokenPair.get("refreshToken"), 7, TimeUnit.DAYS);
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
 
         log.info("User registered: id={}, email={}, role={}", user.getId(), user.getEmail(), role);
-        return new LoginResponse(tokenPair.get("accessToken"), tokenPair.get("refreshToken"), 86400000L, role, user.getId());
+        return buildLoginResponse(tokenPair, role, user.getId());
     }
 
     @Override
@@ -132,8 +137,8 @@ public class AuthServiceImpl implements AuthService {
 
         Map<String, String> tokenPair = jwtTokenProvider.generateTokenPair(user.getId(), user.getRole());
         redisService.set(Constants.REDIS_USER_PREFIX + user.getId(), user, 30, TimeUnit.MINUTES);
-        redisService.set(Constants.REDIS_REFRESH_TOKEN_PREFIX + user.getId(), tokenPair.get("refreshToken"), 7, TimeUnit.DAYS);
-        return new LoginResponse(tokenPair.get("accessToken"), tokenPair.get("refreshToken"), 86400000L, user.getRole(), user.getId());
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
+        return buildLoginResponse(tokenPair, user.getRole(), user.getId());
     }
 
     @Override
@@ -161,8 +166,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         Map<String, String> tokenPair = jwtTokenProvider.generateTokenPair(user.getId(), user.getRole());
-        redisService.set(Constants.REDIS_REFRESH_TOKEN_PREFIX + user.getId(), tokenPair.get("refreshToken"), 7, TimeUnit.DAYS);
-        return new LoginResponse(tokenPair.get("accessToken"), tokenPair.get("refreshToken"), 86400000L, user.getRole(), user.getId());
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
+        return buildLoginResponse(tokenPair, user.getRole(), user.getId());
     }
 
     @Override
@@ -178,5 +183,13 @@ public class AuthServiceImpl implements AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userMapper.updateById(user);
         redisService.delete(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId);
+    }
+
+    private void cacheRefreshToken(Long userId, String refreshToken) {
+        redisService.set(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId, refreshToken, refreshTokenExpiration, TimeUnit.MILLISECONDS);
+    }
+
+    private LoginResponse buildLoginResponse(Map<String, String> tokenPair, String role, Long userId) {
+        return new LoginResponse(tokenPair.get("accessToken"), tokenPair.get("refreshToken"), accessTokenExpiration, role, userId);
     }
 }

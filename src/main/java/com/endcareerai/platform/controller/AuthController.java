@@ -1,5 +1,6 @@
 package com.endcareerai.platform.controller;
 
+import com.endcareerai.platform.common.BusinessException;
 import com.endcareerai.platform.common.Result;
 import com.endcareerai.platform.dto.request.ChangePasswordRequest;
 import com.endcareerai.platform.dto.request.LoginRequest;
@@ -63,7 +64,10 @@ public class AuthController {
 
     @PostMapping("/change-password")
     public Result<Void> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof Long userId)) {
+            throw new BusinessException(401, "用户未认证");
+        }
         authService.changePassword(userId, request);
         return Result.success();
     }

@@ -104,7 +104,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/company',
     component: MainLayout,
-    meta: { requiresAuth: true, role: 'COMPANY_ADMIN' },
+    meta: { requiresAuth: true, role: 'ENTERPRISE' },
     children: [
       {
         path: 'jobs',
@@ -136,7 +136,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/school',
     component: MainLayout,
-    meta: { requiresAuth: true, role: 'SCHOOL_ADMIN' },
+    meta: { requiresAuth: true, role: 'SCHOOL' },
     children: [
 
       {
@@ -163,7 +163,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/platform',
     component: MainLayout,
-    meta: { requiresAuth: true, role: 'PLATFORM_ADMIN' },
+    meta: { requiresAuth: true, role: 'ADMIN' },
     children: [
       {
         path: 'dashboard',

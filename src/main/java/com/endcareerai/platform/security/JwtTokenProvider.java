@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Date;
+import java.util.Map;
 
 /**
  * JWT Token 工具类
@@ -24,6 +26,10 @@ public class JwtTokenProvider {
     // TODO: 请修改为你的 Token 过期时间（毫秒），当前默认24小时
     @Value("${jwt.expiration}")
     private long expiration;
+
+    // TODO: 请根据实际安全策略调整 refresh token 有效期（毫秒），当前默认7天
+    @Value("${jwt.refresh-expiration:604800000}")
+    private long refreshExpiration;
 
     private SecretKey key;
 
@@ -54,6 +60,35 @@ public class JwtTokenProvider {
                 .expiration(expiryDate)
                 .signWith(key)
                 .compact();
+    }
+
+    public Map<String, String> generateTokenPair(Long userId, String role) {
+        Date now = new Date();
+        Date accessExpiryDate = new Date(now.getTime() + expiration);
+        Date refreshExpiryDate = new Date(now.getTime() + refreshExpiration);
+
+        String accessToken = Jwts.builder()
+                .subject(String.valueOf(userId))
+                .claim("role", role)
+                .claim("tokenType", "access")
+                .issuedAt(now)
+                .expiration(accessExpiryDate)
+                .signWith(key)
+                .compact();
+
+        String refreshToken = Jwts.builder()
+                .subject(String.valueOf(userId))
+                .claim("role", role)
+                .claim("tokenType", "refresh")
+                .issuedAt(now)
+                .expiration(refreshExpiryDate)
+                .signWith(key)
+                .compact();
+
+        Map<String, String> tokenPair = new HashMap<>();
+        tokenPair.put("accessToken", accessToken);
+        tokenPair.put("refreshToken", refreshToken);
+        return tokenPair;
     }
 
     /**
@@ -96,6 +131,15 @@ public class JwtTokenProvider {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
             return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public boolean validateRefreshToken(String token) {
+        try {
+            Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            return "refresh".equals(claims.get("tokenType", String.class));
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }

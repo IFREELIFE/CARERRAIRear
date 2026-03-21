@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 import router from '../router'
 
 const axiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: '/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -59,7 +59,7 @@ axiosInstance.interceptors.response.use(
       
       if (refreshToken) {
         try {
-          const response = await axios.post('/api/auth/refresh', {
+          const response = await axios.post('/v1/auth/refresh', {
             refreshToken
           })
           

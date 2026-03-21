@@ -204,7 +204,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const requiresAuth = to.meta.requiresAuth !== false
   const token = localStorage.getItem('accessToken')
   const userStr = localStorage.getItem('user')

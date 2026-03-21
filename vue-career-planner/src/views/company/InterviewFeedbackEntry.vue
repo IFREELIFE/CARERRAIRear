@@ -149,18 +149,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const loadingGap = ref(false)
 const isUpdated = ref(false)
 const feedbackFormRef = ref()
-
-const candidateId = computed(() => route.params.candidateId as string)
 
 // 预设标签
 const presetTags = [
@@ -192,7 +189,7 @@ const feedbackRules = {
       required: true,
       message: '请选择评价标签',
       trigger: 'change',
-      validator: (rule: any, value: any, callback: any) => {
+      validator: (_rule: any, value: any, callback: any) => {
         if (feedbackForm.value.result === '淘汰' && value.length === 0) {
           callback(new Error('淘汰状态下必须选择评价标签'))
         } else {
@@ -350,13 +347,13 @@ const loadGapList = async () => {
 }
 
 // 查看反馈
-const viewFeedback = (feedback: any) => {
+const viewFeedback = (_feedback: any) => {
   // 这里可以实现查看详细反馈的逻辑
   ElMessage.info('查看反馈详情')
 }
 
 // 编辑反馈
-const editFeedback = (feedback: any) => {
+const editFeedback = (_feedback: any) => {
   // 这里可以实现编辑反馈的逻辑
   ElMessage.info('编辑反馈')
 }

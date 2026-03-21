@@ -130,8 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Search, ChatLineRound } from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
 
 // 岗位数据
 const jobs = ref([

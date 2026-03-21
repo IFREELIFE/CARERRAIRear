@@ -81,13 +81,6 @@ const tags = ref([
   '勤奋好学', '团队协作', '技术达人', '问题解决者', '创新思维'
 ])
 
-// 根据分数获取进度条颜色
-const getProgressColor = (score: number) => {
-  if (score >= 85) return '#67C23A'
-  if (score >= 70) return '#E6A23C'
-  return '#F56C6C'
-}
-
 // 初始化图表
 const initChart = () => {
   if (!chartRef.value) return

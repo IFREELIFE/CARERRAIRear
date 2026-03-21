@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 
@@ -85,7 +85,7 @@ const handleSuccess = (response: any, file: File, fileList: FileItem[]) => {
   emit('change', fileList)
 }
 
-const handleError = (error: any, file: File, fileList: FileItem[]) => {
+const handleError = (error: any, file: File, _fileList: FileItem[]) => {
   ElMessage.error('文件上传失败')
   emit('error', error, file)
 }
@@ -95,7 +95,7 @@ const handleRemove = (file: FileItem, fileList: FileItem[]) => {
   emit('change', fileList)
 }
 
-const beforeUpload = (file: File) => {
+const beforeUpload = (_file: File) => {
   // 可以在这里添加文件类型和大小的验证
   return true
 }

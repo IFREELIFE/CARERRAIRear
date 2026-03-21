@@ -79,11 +79,11 @@ const currentSidebar = computed(() => {
   switch (role) {
     case 'STUDENT':
       return StudentSidebar
-    case 'COMPANY_ADMIN':
+    case 'ENTERPRISE':
       return CompanySidebar
-    case 'SCHOOL_ADMIN':
+    case 'SCHOOL':
       return SchoolSidebar
-    case 'PLATFORM_ADMIN':
+    case 'ADMIN':
       return PlatformSidebar
     default:
       return null

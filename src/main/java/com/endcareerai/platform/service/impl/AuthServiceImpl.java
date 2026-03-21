@@ -3,6 +3,10 @@ package com.endcareerai.platform.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.endcareerai.platform.common.BusinessException;
 import com.endcareerai.platform.common.Constants;
+import com.endcareerai.platform.dto.request.ChangePasswordRequest;
+import com.endcareerai.platform.dto.request.LoginRequest;
+import com.endcareerai.platform.dto.request.LogoutRequest;
+import com.endcareerai.platform.dto.request.RefreshRequest;
 import com.endcareerai.platform.dto.request.RegisterRequest;
 import com.endcareerai.platform.dto.response.LoginResponse;
 import com.endcareerai.platform.entity.Enterprise;
@@ -16,11 +20,13 @@ import com.endcareerai.platform.service.AuthService;
 import com.endcareerai.platform.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +44,10 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisService redisService;
+    @Value("${jwt.expiration}")
+    private long accessTokenExpiration;
+    @Value("${jwt.refresh-expiration:604800000}")
+    private long refreshTokenExpiration;
 
     /**
      * 多平台账号注册
@@ -105,12 +115,81 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Generate JWT token
-        String token = jwtTokenProvider.generateToken(user.getId(), role);
+        Map<String, String> tokenPair = jwtTokenProvider.generateTokenPair(user.getId(), role);
 
         // Cache user info in Redis
         redisService.set(Constants.REDIS_USER_PREFIX + user.getId(), user, 30, TimeUnit.MINUTES);
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
 
         log.info("User registered: id={}, email={}, role={}", user.getId(), user.getEmail(), role);
-        return new LoginResponse(token, role, user.getId());
+        return buildLoginResponse(tokenPair, role, user.getId());
+    }
+
+    @Override
+    public LoginResponse login(LoginRequest request) {
+        User user = userMapper.selectOne(new QueryWrapper<User>().eq("email", request.getUsername()));
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new BusinessException("用户名或密码错误");
+        }
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw new BusinessException("账号已被禁用");
+        }
+
+        Map<String, String> tokenPair = jwtTokenProvider.generateTokenPair(user.getId(), user.getRole());
+        redisService.set(Constants.REDIS_USER_PREFIX + user.getId(), user, 30, TimeUnit.MINUTES);
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
+        return buildLoginResponse(tokenPair, user.getRole(), user.getId());
+    }
+
+    @Override
+    public void logout(LogoutRequest request) {
+        if (!jwtTokenProvider.validateRefreshToken(request.getRefreshToken())) {
+            return;
+        }
+        Long userId = jwtTokenProvider.getUserIdFromToken(request.getRefreshToken());
+        redisService.delete(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId);
+    }
+
+    @Override
+    public LoginResponse refresh(RefreshRequest request) {
+        if (!jwtTokenProvider.validateRefreshToken(request.getRefreshToken())) {
+            throw new BusinessException("刷新令牌无效或已过期");
+        }
+        Long userId = jwtTokenProvider.getUserIdFromToken(request.getRefreshToken());
+        Object cachedToken = redisService.get(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId);
+        if (cachedToken == null || !request.getRefreshToken().equals(String.valueOf(cachedToken))) {
+            throw new BusinessException("刷新令牌已失效，请重新登录");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() == 0)) {
+            throw new BusinessException("账号不存在或已禁用");
+        }
+
+        Map<String, String> tokenPair = jwtTokenProvider.generateTokenPair(user.getId(), user.getRole());
+        cacheRefreshToken(user.getId(), tokenPair.get("refreshToken"));
+        return buildLoginResponse(tokenPair, user.getRole(), user.getId());
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(Long userId, ChangePasswordRequest request) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
+            throw new BusinessException("原密码错误");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userMapper.updateById(user);
+        redisService.delete(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId);
+    }
+
+    private void cacheRefreshToken(Long userId, String refreshToken) {
+        redisService.set(Constants.REDIS_REFRESH_TOKEN_PREFIX + userId, refreshToken, refreshTokenExpiration, TimeUnit.MILLISECONDS);
+    }
+
+    private LoginResponse buildLoginResponse(Map<String, String> tokenPair, String role, Long userId) {
+        return new LoginResponse(tokenPair.get("accessToken"), tokenPair.get("refreshToken"), accessTokenExpiration, role, userId);
     }
 }

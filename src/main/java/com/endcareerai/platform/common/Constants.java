@@ -25,6 +25,8 @@ public class Constants {
     // Redis key prefixes
     /** Redis 用户缓存前缀 */
     public static final String REDIS_USER_PREFIX = "user:";
+    /** Redis 刷新令牌缓存前缀 */
+    public static final String REDIS_REFRESH_TOKEN_PREFIX = "refresh_token:";
     /** Redis 岗位缓存前缀 */
     public static final String REDIS_JOB_PREFIX = "job:";
     /** Redis 教师时间段缓存前缀 */

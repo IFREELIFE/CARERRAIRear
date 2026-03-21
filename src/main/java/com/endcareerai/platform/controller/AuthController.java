@@ -1,12 +1,18 @@
 package com.endcareerai.platform.controller;
 
+import com.endcareerai.platform.common.BusinessException;
 import com.endcareerai.platform.common.Result;
+import com.endcareerai.platform.dto.request.ChangePasswordRequest;
+import com.endcareerai.platform.dto.request.LoginRequest;
+import com.endcareerai.platform.dto.request.LogoutRequest;
+import com.endcareerai.platform.dto.request.RefreshRequest;
 import com.endcareerai.platform.dto.request.RegisterRequest;
 import com.endcareerai.platform.dto.response.LoginResponse;
 import com.endcareerai.platform.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,5 +42,33 @@ public class AuthController {
     public Result<LoginResponse> register(@RequestBody @Valid RegisterRequest request) {
         LoginResponse loginResponse = authService.register(request);
         return Result.success(loginResponse);
+    }
+
+    @PostMapping("/login")
+    public Result<LoginResponse> login(@RequestBody @Valid LoginRequest request) {
+        LoginResponse loginResponse = authService.login(request);
+        return Result.success(loginResponse);
+    }
+
+    @PostMapping("/logout")
+    public Result<Void> logout(@RequestBody @Valid LogoutRequest request) {
+        authService.logout(request);
+        return Result.success();
+    }
+
+    @PostMapping("/refresh")
+    public Result<LoginResponse> refresh(@RequestBody @Valid RefreshRequest request) {
+        LoginResponse loginResponse = authService.refresh(request);
+        return Result.success(loginResponse);
+    }
+
+    @PostMapping("/change-password")
+    public Result<Void> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof Long userId)) {
+            throw new BusinessException(401, "用户未认证");
+        }
+        authService.changePassword(userId, request);
+        return Result.success();
     }
 }

@@ -66,5 +66,5 @@ export const companyInterviewFeedbackApi = {
 
 // 智能简历筛选
 export const getResumeDetail = (candidateId: string) => {
-  return axios.get(`/api/company/resume/detail/${candidateId}`)
+  return axios.get(`/company/resume/detail/${candidateId}`)
 }

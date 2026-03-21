@@ -107,9 +107,9 @@ const loginRules = {
 const getRedirectPath = (role: string): string => {
   const rolePathMap: Record<string, string> = {
     'STUDENT': '/student',
-    'SCHOOL_ADMIN': '/school/profile',
-    'COMPANY_ADMIN': '/company/jobs',
-    'PLATFORM_ADMIN': '/platform/dashboard'
+    'SCHOOL': '/school/profile',
+    'ENTERPRISE': '/company/jobs',
+    'ADMIN': '/platform/dashboard'
   }
   return rolePathMap[role] || '/'
 }
@@ -127,23 +127,23 @@ const handleLogin = async () => {
   
   try {
     loading.value = true
-    
-    // 模拟登录成功，直接跳转到学生端
-    const mockAccessToken = 'mock-access-token'
-    const mockRefreshToken = 'mock-refresh-token'
-    const mockRole = 'STUDENT'
-    
-    localStorage.setItem('accessToken', mockAccessToken)
-    localStorage.setItem('refreshToken', mockRefreshToken)
+
+    const response = await login({
+      username: loginForm.username,
+      password: loginForm.password
+    })
+    const loginData = response.data
+
+    localStorage.setItem('accessToken', loginData.accessToken)
+    localStorage.setItem('refreshToken', loginData.refreshToken)
     localStorage.setItem('user', JSON.stringify({ 
-      role: mockRole,
+      role: loginData.role,
       username: loginForm.username
     }))
     
     ElMessage.success('登录成功')
-    
-    // 跳转到平台管理端首页
-    router.push(getRedirectPath(mockRole))
+
+    router.push(getRedirectPath(loginData.role))
   } catch (error: any) {
     console.error('Login error:', error)
     const errorMsg = error.message || '登录失败'

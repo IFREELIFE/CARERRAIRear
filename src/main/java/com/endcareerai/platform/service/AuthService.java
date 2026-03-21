@@ -1,5 +1,9 @@
 package com.endcareerai.platform.service;
 
+import com.endcareerai.platform.dto.request.ChangePasswordRequest;
+import com.endcareerai.platform.dto.request.LoginRequest;
+import com.endcareerai.platform.dto.request.LogoutRequest;
+import com.endcareerai.platform.dto.request.RefreshRequest;
 import com.endcareerai.platform.dto.request.RegisterRequest;
 import com.endcareerai.platform.dto.response.LoginResponse;
 
@@ -17,4 +21,12 @@ public interface AuthService {
      * @return 包含 JWT Token、角色和用户ID的登录响应
      */
     LoginResponse register(RegisterRequest request);
+
+    LoginResponse login(LoginRequest request);
+
+    void logout(LogoutRequest request);
+
+    LoginResponse refresh(RefreshRequest request);
+
+    void changePassword(Long userId, ChangePasswordRequest request);
 }

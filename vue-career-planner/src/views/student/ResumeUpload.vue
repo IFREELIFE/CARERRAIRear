@@ -24,14 +24,15 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { UploadFile, UploadFiles } from 'element-plus'
 
 const fileList = ref([])
 
-const handlePreview = (file) => {
+const handlePreview = (file: UploadFile) => {
   console.log(file)
 }
 
-const handleRemove = (file, fileList) => {
+const handleRemove = (file: UploadFile, fileList: UploadFiles) => {
   console.log(file, fileList)
 }
 </script>

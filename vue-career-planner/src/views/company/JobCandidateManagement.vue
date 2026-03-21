@@ -181,10 +181,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { useJobStore } from '../../stores/jobStore'
 
-const router = useRouter()
 const jobStore = useJobStore()
 
 // 激活的标签页

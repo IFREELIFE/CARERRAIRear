@@ -161,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
@@ -276,19 +276,6 @@ watch(() => recordForm.value.studentId, (newStudentId) => {
 })
 
 // 添加老师
-const addTeacher = () => {
-  isEditing.value = false
-  teacherForm.value = {
-    id: '',
-    name: '',
-    subject: '',
-    phone: '',
-    guidanceTime: '',
-    location: ''
-  }
-  dialogVisible.value = true
-}
-
 // 编辑老师
 const editTeacher = (teacher: any) => {
   isEditing.value = true

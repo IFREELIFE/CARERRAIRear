@@ -92,17 +92,11 @@ import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '../../api/auth'
 
 const router = useRouter()
-const loginFormRef = ref()
 const loading = ref(false)
 const loginForm = reactive({
   username: '',
   password: ''
 })
-
-const loginRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
 
 const getRedirectPath = (role: string): string => {
   const rolePathMap: Record<string, string> = {

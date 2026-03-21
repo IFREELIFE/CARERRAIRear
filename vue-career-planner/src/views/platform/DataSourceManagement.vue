@@ -209,9 +209,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, UploadFilled, Check, Warning } from '@element-plus/icons-vue'
+import { Upload, UploadFilled } from '@element-plus/icons-vue'
+import type { UploadFile } from 'element-plus'
 
 const uploaded = ref(false)
 const showValidation = ref(false)
@@ -271,8 +272,8 @@ const importHistory = ref([
   { id: 'IMP-20240310-001', filename: '春季招聘岗位.xlsx', total: 150, success: 145, failure: 5, status: '已完成', createTime: '2024-03-10 09:15:00' }
 ])
 
-const handleFileChange = (file: any) => {
-  this.file = file.raw
+const handleFileChange = (uploadFile: UploadFile) => {
+  file.value = uploadFile.raw ?? null
   // 模拟文件解析
   isProcessing.value = true
   setTimeout(() => {
@@ -347,7 +348,7 @@ const removeRow = (row: any) => {
   }
 }
 
-const overrideRow = (row: any) => {
+const overrideRow = (_row: any) => {
   ElMessage.success('已选择覆盖')
 }
 

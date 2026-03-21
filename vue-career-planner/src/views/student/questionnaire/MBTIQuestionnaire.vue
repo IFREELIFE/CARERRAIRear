@@ -10,10 +10,10 @@
         <span class="progress-text">{{ currentQuestionIndex + 1 }} / {{ questions.length }}</span>
       </div>
       <div class="question-container">
-        <h2 class="question-title">{{ questions[currentQuestionIndex].question }}</h2>
+        <h2 class="question-title">{{ currentQuestion?.question }}</h2>
         <div class="options">
           <el-radio-group v-model="answers[currentQuestionIndex]">
-            <el-radio v-for="(option, index) in questions[currentQuestionIndex].options" :key="index" :label="option.value">
+            <el-radio v-for="(option, index) in currentQuestion?.options || []" :key="index" :label="option.value">
               {{ option.text }}
             </el-radio>
           </el-radio-group>
@@ -127,6 +127,8 @@ const answers = ref<(string | null)[]>(Array(questions.value.length).fill(null))
 const progress = computed(() => {
   return Math.round(((currentQuestionIndex.value + 1) / questions.value.length) * 100)
 })
+
+const currentQuestion = computed(() => questions.value[currentQuestionIndex.value])
 
 const formatProgress = (percentage: number) => {
   return `${percentage}%`

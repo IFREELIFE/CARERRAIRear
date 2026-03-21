@@ -398,10 +398,11 @@ const submitJob = async () => {
         if (isEdit.value) {
           const index = jobs.value.findIndex(j => j.id === jobForm.value.id)
           if (index > -1) {
+            const existingJob = jobs.value[index]
             jobs.value[index] = {
               ...jobForm.value,
-              applicants: jobs.value[index].applicants,
-              createTime: jobs.value[index].createTime,
+              applicants: existingJob?.applicants ?? 0,
+              createTime: existingJob?.createTime ?? new Date().toLocaleString('zh-CN'),
               updateTime: new Date().toLocaleString('zh-CN')
             }
           }

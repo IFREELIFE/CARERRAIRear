@@ -7,6 +7,7 @@
 - **消息队列**: RabbitMQ (异步LLM任务处理)
 - **缓存**: Redis (用户/岗位/教师时段缓存)
 - **搜索引擎**: Elasticsearch (岗位全文检索)
+- **图谱**: Neo4j (岗位画像/人物画像图谱存储，供 AI Prompt 检索)
 - **认证**: JWT + Spring Security (角色权限控制)
 - **Excel导入**: Apache POI 5.2.5
 - **LLM集成**: OpenAI 兼容接口 (支持 OpenAI / DeepSeek / 通义千问等)
@@ -103,6 +104,7 @@ src/main/java/com/endcareerai/platform/
 - JDK 17+
 - MySQL 8.0+
 - Redis 7+
+- Neo4j 5+ (画像图谱)
 - RabbitMQ 3.12+
 - Elasticsearch 8.x
 - LLM API 密钥 (OpenAI / DeepSeek / 通义千问等)

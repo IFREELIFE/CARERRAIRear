@@ -32,6 +32,13 @@ spring:
     elasticsearch:
       uris: http://localhost:9200  # TODO: 请修改为你的 Elasticsearch 地址
 
+  # Neo4j 图数据库配置（画像依赖 Neo4j + AI 联动）
+  neo4j:
+    uri: bolt://localhost:7687       # TODO: 请修改为你的 Neo4j 连接地址
+    authentication:
+      username: neo4j                # TODO: 请修改为你的 Neo4j 用户名
+      password: ${NEO4J_PASSWORD:}        # TODO: 必须通过环境变量或机密管理注入密码， 勿在生产环境硬编码
+
   # RabbitMQ 消息队列配置
   rabbitmq:
     host: localhost     # TODO: 请修改为你的 RabbitMQ 服务器地址

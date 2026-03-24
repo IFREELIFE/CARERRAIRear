@@ -17,6 +17,7 @@ import com.endcareerai.platform.mapper.JobMapper;
 import com.endcareerai.platform.mapper.StudentMapper;
 import com.endcareerai.platform.mq.LlmTaskProducer;
 import com.endcareerai.platform.service.ElasticsearchService;
+import com.endcareerai.platform.service.GraphProfileService;
 import com.endcareerai.platform.service.LlmService;
 import com.endcareerai.platform.service.RedisService;
 import com.endcareerai.platform.service.StudentService;
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class StudentServiceImpl implements StudentService {
 
+    private static final String GRAPH_LABEL = "Neo4j-Graph";
     private final StudentMapper studentMapper;
     private final JobMapper jobMapper;
     private final JobApplicationMapper jobApplicationMapper;
@@ -46,6 +48,7 @@ public class StudentServiceImpl implements StudentService {
     private final LlmService llmService;
     private final RedisService redisService;
     private final ElasticsearchService elasticsearchService;
+    private final GraphProfileService graphProfileService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -184,13 +187,25 @@ public class StudentServiceImpl implements StudentService {
             throw new BusinessException("学生记录不存在");
         }
 
+        // 优先从 Neo4j 图谱补齐画像，确保 AI prompt 具备“Neo4j + AI” 的双重上下文
+        String graphJobProfile = graphProfileService.fetchJobProfileByCode(job.getJobCode());
+        String graphStudentRadar = graphProfileService.fetchStudentProfile(userId);
+        String mergedJobProfile = mergeGraphAndAiContext(graphJobProfile, job.getAiExtractedProfile(), "job");
+        String mergedStudentRadar = mergeGraphAndAiContext(graphStudentRadar, student.getAi12DimRadar(), "student");
+        boolean hasGraphContext = hasText(graphJobProfile) || hasText(graphStudentRadar);
+
+        // 记录学生-岗位关系，便于图谱后续联动
+        if (hasGraphContext) {
+            graphProfileService.linkStudentToJob(userId, job.getId());
+        }
+
         // Call LLM for intelligent job chat response
         String answer;
         try {
             answer = llmService.jobChat(
                     job.getTitle(),
-                    job.getAiExtractedProfile(),
-                    student.getAi12DimRadar(),
+                    mergedJobProfile,
+                    mergedStudentRadar,
                     request.getQuestion());
         } catch (Exception e) {
             log.warn("LLM job chat failed, returning fallback: {}", e.getMessage());
@@ -247,5 +262,31 @@ public class StudentServiceImpl implements StudentService {
         log.info("Job application created: userId={}, jobId={}, applicationId={}",
                 userId, jobId, application.getId());
         return application;
+    }
+
+    /**
+     * 合并 Neo4j 图谱与数据库中的 AI 画像上下文，使 LLM Prompt 同时具备图谱语义与最新 AI 输出
+     */
+    static String mergeGraphAndAiContext(String graphValue, String aiValue, String label) {
+        boolean hasGraph = hasText(graphValue);
+        boolean hasAi = hasText(aiValue);
+        if (!hasGraph && !hasAi) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder();
+        if (hasGraph) {
+            builder.append(GRAPH_LABEL).append("[").append(label).append("]=").append(graphValue);
+        }
+        if (hasAi) {
+            if (builder.length() > 0) {
+                builder.append(" || ");
+            }
+            builder.append("AI-Source[").append(label).append("]=").append(aiValue);
+        }
+        return builder.toString();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

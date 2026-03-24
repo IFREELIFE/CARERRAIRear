@@ -11,6 +11,7 @@ import com.endcareerai.platform.mapper.LlmTaskMapper;
 import com.endcareerai.platform.mapper.StudentMapper;
 import com.endcareerai.platform.service.ElasticsearchService;
 import com.endcareerai.platform.service.LlmService;
+import com.endcareerai.platform.service.GraphProfileService;
 import com.endcareerai.platform.service.RedisService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.rabbitmq.client.Channel;
@@ -43,6 +44,7 @@ public class LlmTaskConsumer {
     private final LlmService llmService;
     private final ElasticsearchService elasticsearchService;
     private final RedisService redisService;
+    private final GraphProfileService graphProfileService;
 
     /**
      * 监听 RabbitMQ 队列，接收并处理 LLM 异步任务消息
@@ -137,6 +139,9 @@ public class LlmTaskConsumer {
         job.setStatus("ACTIVE");
         jobMapper.updateById(job);
 
+        // Persist portrait into Neo4j graph for downstream retrieval
+        graphProfileService.upsertJobProfile(job.getId(), job.getJobCode(), job.getTitle(), job.getLocation(), extractedProfile);
+
         // Sync updated job to Elasticsearch so it can be searched as ACTIVE
         elasticsearchService.syncJobToEs(job);
 
@@ -174,6 +179,9 @@ public class LlmTaskConsumer {
         // Update student with AI-generated 12-dim radar
         student.setAi12DimRadar(radarProfile);
         studentMapper.updateById(student);
+
+        // Persist student portrait into Neo4j graph
+        graphProfileService.upsertStudentProfile(studentId, student.getRealName(), student.getMbtiResult(), radarProfile);
 
         // Invalidate cache
         redisService.delete(Constants.REDIS_USER_PREFIX + studentId);
@@ -234,6 +242,9 @@ public class LlmTaskConsumer {
         // Update student radar
         student.setAi12DimRadar(updatedRadar);
         studentMapper.updateById(student);
+
+        // Sync updated radar into graph
+        graphProfileService.upsertStudentProfile(studentId, student.getRealName(), student.getMbtiResult(), updatedRadar);
 
         // Mark appointments as RAG processed
         for (CounselingAppointment appointment : completedAppointments) {

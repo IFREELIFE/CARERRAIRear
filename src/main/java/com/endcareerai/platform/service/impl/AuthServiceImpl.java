@@ -64,16 +64,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse register(RegisterRequest request) {
-        String originalRole = request.getRole();
-        if (originalRole == null) {
-            throw new BusinessException("角色不能为空");
-        }
-        String role = originalRole.trim();
-        if (role.isEmpty()) {
+        String role = request.getRole();
+        if (role == null || role.isBlank()) {
             throw new BusinessException("角色不能为空");
         }
         // Normalize to uppercase because role constants are defined in uppercase
-        role = role.toUpperCase();
+        role = role.trim().toUpperCase();
         if (!Constants.ROLE_STUDENT.equals(role)
                 && !Constants.ROLE_SCHOOL.equals(role)
                 && !Constants.ROLE_ENTERPRISE.equals(role)) {

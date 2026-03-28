@@ -97,16 +97,17 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (Constants.ROLE_ENTERPRISE.equals(role)) {
-            if (request.getCreditCode() == null || request.getCreditCode().isBlank()) {
-                throw new BusinessException("企业注册需要统一社会信用代码");
-            }
-            if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
-                throw new BusinessException("企业注册需要公司名称");
-            }
             String creditCode = request.getCreditCode();
             if (creditCode == null || creditCode.isBlank()) {
                 throw new BusinessException("企业注册需要统一社会信用代码");
             }
+            creditCode = creditCode.trim();
+
+            String companyName = request.getCompanyName();
+            if (companyName == null || companyName.isBlank()) {
+                throw new BusinessException("企业注册需要公司名称");
+            }
+
             Long existingEnterprise = enterpriseMapper.selectCount(
                     new QueryWrapper<Enterprise>().eq("credit_code", creditCode));
             if (existingEnterprise != null && existingEnterprise > 0) {
@@ -134,7 +135,7 @@ public class AuthServiceImpl implements AuthService {
             Enterprise enterprise = new Enterprise();
             enterprise.setUserId(user.getId());
             enterprise.setCompanyName(request.getCompanyName());
-            enterprise.setCreditCode(request.getCreditCode());
+            enterprise.setCreditCode(request.getCreditCode() == null ? null : request.getCreditCode().trim());
             enterpriseMapper.insert(enterprise);
         }
 

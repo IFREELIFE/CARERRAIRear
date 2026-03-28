@@ -69,7 +69,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("角色不能为空");
         }
         String role = originalRole.trim();
-        if (role.isBlank()) {
+        if (role.isEmpty()) {
             throw new BusinessException("角色不能为空");
         }
         // Normalize to uppercase because role constants are defined in uppercase
@@ -88,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Check if email already exists
         Long existingCount = userMapper.selectCount(
-                new QueryWrapper<User>().eq("email", normalizedEmail).last("LIMIT 1"));
+                new QueryWrapper<User>().eq("email", normalizedEmail));
         if (existingCount != null && existingCount > 0) {
             throw new BusinessException("邮箱已被注册");
         }
@@ -112,7 +112,7 @@ public class AuthServiceImpl implements AuthService {
                 throw new BusinessException("企业注册需要统一社会信用代码");
             }
             Long existingEnterprise = enterpriseMapper.selectCount(
-                    new QueryWrapper<Enterprise>().eq("credit_code", creditCode).last("LIMIT 1"));
+                    new QueryWrapper<Enterprise>().eq("credit_code", creditCode));
             if (existingEnterprise != null && existingEnterprise > 0) {
                 throw new BusinessException("该统一社会信用代码已注册");
             }

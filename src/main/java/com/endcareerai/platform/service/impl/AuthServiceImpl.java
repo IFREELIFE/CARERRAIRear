@@ -64,35 +64,63 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse register(RegisterRequest request) {
+        String role = request.getRole();
+        if (role == null || role.isBlank()) {
+            throw new BusinessException("角色不能为空");
+        }
+        // Normalize to uppercase because role constants are defined in uppercase
+        role = role.trim().toUpperCase();
+        if (!Constants.ROLE_STUDENT.equals(role)
+                && !Constants.ROLE_SCHOOL.equals(role)
+                && !Constants.ROLE_ENTERPRISE.equals(role)) {
+            throw new BusinessException("不支持的角色类型");
+        }
+
+        String email = request.getEmail();
+        if (email == null || email.isBlank()) {
+            throw new BusinessException("邮箱不能为空");
+        }
+        String normalizedEmail = email.trim().toLowerCase();
+
         // Check if email already exists
         Long existingCount = userMapper.selectCount(
-                new QueryWrapper<User>().eq("email", request.getEmail()));
-        if (existingCount > 0) {
+                new QueryWrapper<User>().eq("email", normalizedEmail));
+        if (existingCount != null && existingCount > 0) {
             throw new BusinessException("邮箱已被注册");
         }
 
-        String role = request.getRole();
-
         // Validate role-specific requirements
         if (Constants.ROLE_SCHOOL.equals(role)) {
-            String email = request.getEmail();
-            if (!email.endsWith(".edu") && !email.endsWith(".edu.cn")) {
+            if (!normalizedEmail.endsWith(".edu") && !normalizedEmail.endsWith(".edu.cn")) {
                 throw new BusinessException("学校账号邮箱必须以 .edu 或 .edu.cn 结尾");
             }
         }
 
+        String enterpriseCreditCode = null;
+        String enterpriseCompanyName = null;
         if (Constants.ROLE_ENTERPRISE.equals(role)) {
-            if (request.getCreditCode() == null || request.getCreditCode().isBlank()) {
+            String creditCode = request.getCreditCode();
+            if (creditCode == null || creditCode.isBlank()) {
                 throw new BusinessException("企业注册需要统一社会信用代码");
             }
-            if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
+            enterpriseCreditCode = creditCode.trim();
+
+            String companyName = request.getCompanyName();
+            if (companyName == null || companyName.isBlank()) {
                 throw new BusinessException("企业注册需要公司名称");
+            }
+            enterpriseCompanyName = companyName.trim();
+
+            Long existingEnterprise = enterpriseMapper.selectCount(
+                    new QueryWrapper<Enterprise>().eq("credit_code", enterpriseCreditCode));
+            if (existingEnterprise != null && existingEnterprise > 0) {
+                throw new BusinessException("该统一社会信用代码已注册");
             }
         }
 
         // Create user
         User user = new User();
-        user.setEmail(request.getEmail());
+        user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(role);
         user.setStatus(1);
@@ -109,8 +137,8 @@ public class AuthServiceImpl implements AuthService {
         if (Constants.ROLE_ENTERPRISE.equals(role)) {
             Enterprise enterprise = new Enterprise();
             enterprise.setUserId(user.getId());
-            enterprise.setCompanyName(request.getCompanyName());
-            enterprise.setCreditCode(request.getCreditCode());
+            enterprise.setCompanyName(enterpriseCompanyName);
+            enterprise.setCreditCode(enterpriseCreditCode);
             enterpriseMapper.insert(enterprise);
         }
 

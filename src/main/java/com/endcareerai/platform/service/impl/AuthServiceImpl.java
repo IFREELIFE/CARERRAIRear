@@ -96,20 +96,23 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
+        String enterpriseCreditCode = null;
+        String enterpriseCompanyName = null;
         if (Constants.ROLE_ENTERPRISE.equals(role)) {
             String creditCode = request.getCreditCode();
             if (creditCode == null || creditCode.isBlank()) {
                 throw new BusinessException("企业注册需要统一社会信用代码");
             }
-            creditCode = creditCode.trim();
+            enterpriseCreditCode = creditCode.trim();
 
             String companyName = request.getCompanyName();
             if (companyName == null || companyName.isBlank()) {
                 throw new BusinessException("企业注册需要公司名称");
             }
+            enterpriseCompanyName = companyName.trim();
 
             Long existingEnterprise = enterpriseMapper.selectCount(
-                    new QueryWrapper<Enterprise>().eq("credit_code", creditCode));
+                    new QueryWrapper<Enterprise>().eq("credit_code", enterpriseCreditCode));
             if (existingEnterprise != null && existingEnterprise > 0) {
                 throw new BusinessException("该统一社会信用代码已注册");
             }
@@ -134,8 +137,8 @@ public class AuthServiceImpl implements AuthService {
         if (Constants.ROLE_ENTERPRISE.equals(role)) {
             Enterprise enterprise = new Enterprise();
             enterprise.setUserId(user.getId());
-            enterprise.setCompanyName(request.getCompanyName());
-            enterprise.setCreditCode(request.getCreditCode() == null ? null : request.getCreditCode().trim());
+            enterprise.setCompanyName(enterpriseCompanyName);
+            enterprise.setCreditCode(enterpriseCreditCode);
             enterpriseMapper.insert(enterprise);
         }
 

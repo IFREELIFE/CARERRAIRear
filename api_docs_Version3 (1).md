@@ -1,168 +1,301 @@
-# 智能求职匹配平台 核心 API 接口文档
+# 智能求职匹配平台 API 接口文档
 
 ## 全局规范
-- **Base URL:** `https://api.domain.com/v1`
-- **Content-Type:** `application/json` (文件上传接口除外)
-- **鉴权方式:** Header 中附带 `Authorization: Bearer <JWT_TOKEN>`
+- **Base Path:** `/`（无版本前缀，如有网关可自行追加）
+- **Content-Type:** `application/json`（文件上传接口除外）
+- **鉴权方式:** 除 `/auth/register`、`/auth/login`、`/auth/refresh` 公开，其余接口需在 Header 中附带 `Authorization: Bearer <JWT_TOKEN>`
+- **角色与路径（基于 SecurityConfig）:**
+  - 学生：访问 `/student/**`
+  - 学校：访问 `/school/**`（学生也可访问）
+  - 企业：访问 `/jobs/**`、`/enterprise/**`、`/jobs/import/**`
+  - 管理员：访问 `/admin/**`
+- **统一响应结构（Result<T>):**
+  ```json
+  {
+    "code": 200,
+    "message": "success",
+    "data": {}
+  }
+  ```
+  - `code=200` 表示成功；业务或校验错误返回相应错误码与 `message` 描述，`data` 可能为 `null`。
+  - 校验异常示例：`{"code":400,"message":"field: must not be blank","data":null}`
 
 ---
 
-## 模块一：认证与基础信息 (Auth)
+## 模块一：认证与基础信息 (Auth) `/auth`
 
 ### 1. 多端账号注册
-- **POST** `/auth/register`
-- **接口说明:** 
-  处理学生、学校、企业三端的注册逻辑。学生端只需邮箱和基础学籍信息；学校端需进行edu邮箱后缀校验；企业端接入天眼查API，通过传入的企业三要素（企业名称、信用代码、法人）进行真实性核验。
-- **Request Body:**
+- **POST** `/auth/register` （公开）
+- **Body:**
   ```json
   {
-    "role": "STUDENT", // STUDENT | SCHOOL | ENTERPRISE
+    "role": "STUDENT | SCHOOL | ENTERPRISE",
     "email": "student@edu.cn",
-    "password": "hashed_password",
-    "credit_code": "91110108551385082Q", // 企业端必填
-    "company_name": "某科技公司" // 企业端必填
+    "password": "plain_or_hashed",
+    "creditCode": "91110108551385082Q",   // 企业端可选
+    "companyName": "某科技公司"            // 企业端可选
   }
   ```
+- **Response:** `LoginResponse`
+  ```json
+  {
+    "code": 200,
+    "message": "success",
+    "data": {
+      "accessToken": "jwt-access",
+      "refreshToken": "jwt-refresh",
+      "expiresIn": 3600,
+      "token": "jwt-access",
+      "role": "STUDENT",
+      "userId": 1
+    }
+  }
+  ```
+
+### 2. 登录
+- **POST** `/auth/login` （公开）
+- **Body:**
+  ```json
+  { "username": "student@edu.cn", "password": "******" }
+  ```
+- **Response:** `LoginResponse`（同上）
+
+### 3. 退出登录
+- **POST** `/auth/logout` （需登录）
+- **Body:**
+  ```json
+  { "refreshToken": "jwt-refresh-token" }
+  ```
+- **Response:** 成功返回 `data=null`
+
+### 4. 刷新 Token
+- **POST** `/auth/refresh` （公开）
+- **Body:**
+  ```json
+  { "refreshToken": "jwt-refresh-token" }
+  ```
+- **Response:** `LoginResponse`（同上）
+
+### 5. 修改密码
+- **POST** `/auth/change-password` （需登录）
+- **Body:**
+  ```json
+  {
+    "oldPassword": "old-pass",
+    "newPassword": "new-pass"
+  }
+  ```
+- **Response:** 成功返回 `data=null`
 
 ---
 
-## 模块二：学生端 (Student)
+## 模块二：学生端 (Student) `/student`（角色：STUDENT）
 
-### 1. 提交初始技术能力与 MBTI 测试
+### 1. 提交初始技术能力与 MBTI
 - **POST** `/student/profile/init`
-- **接口说明:** 
-  学生首次登录时的必经节点。学生填写的原始技术栈和 MBTI 结果提交后，后端会将其推入消息队列，由大模型异步生成核心的“12维能力雷达图”和初始人物画像。此接口要求前端必须传入 `is_guaranteed=true`（保证书确认）。
-- **Request Body:**
+- **Body:** `guaranteed` 字段必须为 `true`
   ```json
   {
-    "tech_skills": "Java, SpringBoot, 熟悉MySQL",
+    "techSkills": "Java, SpringBoot, MySQL",
     "mbti": "INTJ",
-    "is_guaranteed": true
+    "guaranteed": true
   }
   ```
+- **Response:** 成功返回 `data=null`；若未勾选保证书返回 400 业务错误。
 
 ### 2. 目标职业匹配与生成规划 PDF
 - **POST** `/student/career/match-and-plan`
-- **接口说明:** 
-  学生选定目标城市和职业后，AI 会将【学生的12维画像】与【大盘该岗位的平均画像】进行对比。如果匹配度低于70%，系统会阻断并返回不推荐原因；如果学生在二次确认弹窗中选择坚持（`force_generate: true`），或者匹配度本就高于70%，系统将调用大模型生成专属的职业规划与培养方案，并转化为可下载的 PDF 链接。
-- **Request Body:**
+- **Body:**
   ```json
   {
-    "target_city": "东莞",
-    "target_job": "前端开发",
-    "force_generate": false 
+    "targetCity": "深圳",
+    "targetJob": "前端开发",
+    "forceGenerate": false
   }
   ```
-- **Response:**
+- **Response:** `CareerMatchResponse`
   ```json
   {
-    "match_score": 65,
-    "recommend": false,
-    "reason": "你的12维画像中前端基础较弱，缺少项目实际落地经验。",
-    "pdf_url": null 
+    "code": 200,
+    "message": "success",
+    "data": {
+      "matchScore": 75,
+      "recommend": true,
+      "reason": "AI分析结果...",
+      "pdfUrl": "/api/reports/career-plan/1_1716960000000.pdf"
+    }
   }
   ```
 
-### 3. 职位详情页 AI 智能体对话 (1/4 屏幕)
+### 3. 职位详情页 AI 智能体对话
 - **POST** `/student/agent/job-chat`
-- **接口说明:** 
-  学生在职位详情页右下角唤起的 AI 问答接口。后端会将当前页面的【岗位清洗画像】和当前用户的【12维人物画像】作为 System Prompt 的上下文注入，使得 LLM 能够精准回答“我符合这个岗位吗？”、“我还需要学什么？”等就业相关问题。
-- **Request Body:**
+- **Body:**
   ```json
   {
-    "job_code": "CC668565120J40736166805",
+    "jobCode": "CC668565120J40736166805",
     "question": "这个岗位要求的技术栈我匹配吗？"
+  }
+  ```
+- **Response:** `JobChatResponse`
+  ```json
+  {
+    "code": 200,
+    "message": "success",
+    "data": {
+      "answer": "基于您的12维画像...",
+      "jobCode": "CC668565120J40736166805"
+    }
   }
   ```
 
 ### 4. 职位投递与企业授权
-- **POST** `/student/jobs/{job_id}/apply`
-- **接口说明:** 
-  学生投递简历。调用此接口后，不仅会生成一条投递记录，还会将 `is_authorized` 状态置为 true。这意味着该岗位的对应企业 / HR 获得了查看该学生详细 12维画像和原始档案的权限。
-- **Request Body:**
+- **POST** `/student/jobs/{jobId}/apply`
+- **Body:**（默认授权企业查看画像）
+  ```json
+  { "grantAuthToEnterprise": true }
+  ```
+- **Response:** `JobApplication`
   ```json
   {
-    "grant_auth_to_enterprise": true 
+    "code": 200,
+    "message": "success",
+    "data": {
+      "id": 10,
+      "studentId": 1,
+      "jobId": 22,
+      "enterpriseId": 5,
+      "isAuthorized": 1,
+      "status": "APPLIED",
+      "createdAt": "2026-03-28T08:30:00"
+    }
   }
   ```
 
+### 5. 关键词搜索岗位
+- **GET** `/student/jobs/search?keyword=后端`
+- **Response:** `JobDocument[]`
+  ```json
+  {
+    "code": 200,
+    "message": "success",
+    "data": [
+      {
+        "id": 22,
+        "enterpriseId": 5,
+        "jobCode": "J20240328001",
+        "title": "后端开发工程师",
+        "location": "深圳",
+        "salaryRange": "15k-25k",
+        "rawDescription": "...",
+        "status": "ACTIVE",
+        "aiExtractedProfile": "{...}"
+      }
+    ]
+  }
+  ```
+
+### 6. 获取所有上架岗位
+- **GET** `/student/jobs/active`
+- **Response:** `JobDocument[]`（同上，仅返回 `status=ACTIVE` 的岗位）
+
 ---
 
-## 模块三：学校端 (School)
+## 模块三：学校端 (School) `/school`（角色：SCHOOL 或 STUDENT）
 
 ### 1. 获取可选辅导老师与时间段
 - **GET** `/school/teachers/available-slots`
-- **接口说明:** 
-  学校端创建了多位辅导老师后，学生可通过此接口获取所有老师的排班表、空闲时段和指导地点，用于前端展示预约日历。
-- **Response:**
+- **Response:** `TeacherSlotResponse[]`
   ```json
-  [
-    {
-      "teacher_id": 1,
-      "name": "张老师",
-      "location": "就业指导中心 301",
-      "available_times": ["2026-03-12 14:00:00", "2026-03-12 15:00:00"]
-    }
-  ]
+  {
+    "code": 200,
+    "message": "success",
+    "data": [
+      {
+        "teacherId": 1,
+        "name": "张老师",
+        "location": "就业指导中心 301",
+        "availableTimes": ["2026-03-12 14:00:00", "2026-03-12 15:00:00"]
+      }
+    ]
+  }
   ```
 
-### 2. 老师提交辅导纪要与评价 (触发 RAG 反哺)
-- **POST** `/school/appointments/{appointment_id}/evaluate`
-- **接口说明:** 
-  线下 1v1 辅导结束后，老师调用此接口提交面谈纪要。**核心亮点**：提交后，系统会将这段人工评语向量化并存入向量数据库（RAG）。当 AI 下次重新评估该学生画像时，会强制检索这段老师的评语，实现对学生软素质得分（如沟通能力、抗压能力）的智能微调与人机协同。
-- **Request Body:**
+### 2. 老师提交辅导纪要与评价
+- **POST** `/school/appointments/{appointmentId}/evaluate`
+- **Body:**
   ```json
   {
     "tags": ["表达内向", "逻辑清晰"],
-    "teacher_evaluation": "学生底层逻辑不错，但是模拟面试时非常紧张，表达不流畅，建议下调沟通得分。"
+    "teacherEvaluation": "学生底层逻辑不错，但表达紧张..."
   }
   ```
+- **Response:** 成功返回 `data=null`
 
 ---
 
-## 模块四：企业端 (Enterprise)
+## 模块四：企业端 (Enterprise)（角色：ENTERPRISE）
 
-### 1. 批量上传岗位 XLS 表格
+### 1. 批量上传岗位 Excel
 - **POST** `/jobs/import/excel`
-- **接口说明:** 
-  支持平台管理端导入大盘数据，也支持企业自行上传招聘模板 Excel。接口采用异步处理设计，解析出表格中的长文本后，系统会按照“站点+岗位编码”进行去重，然后按行拆分成独立的任务扔进 RabbitMQ 消息队列，由后台 LLM 慢慢进行清洗提取，防止接口超时。
-- **Content-Type:** `multipart/form-data`
+- **Content-Type:** `multipart/form-data`，表单字段名 `file`
+- **Response:** 成功返回 `data=null`
 
 ### 2. 手动关闭/下线招聘岗位
-- **PUT** `/enterprise/jobs/{job_id}/close`
-- **接口说明:** 
-  企业 HR 招满人员后，调用此接口将岗位状态从 `ACTIVE` 变更为 `CLOSED`。关闭后的岗位将立即从学生端的信息大厅中隐藏，同时停止接收新的投递。
+- **PUT** `/enterprise/jobs/{jobId}/close`
+- **Response:** 成功返回 `data=null`
 
-### 3. 企业录入真实面试反馈 (触发自愈)
-- **POST** `/enterprise/interviews/{application_id}/feedback`
-- **接口说明:** 
-  **整个平台最核心的自愈闭环接口**。面试结束后，HR 录入面试结果。如果是“淘汰(FAIL)”，后端会自动抓取 HR 填写的 tags 和 notes，并将其静默追加到该学生账户下的 `Gap_JSON`（匹配差距清单）字段中。这样学生就能知道具体的“死因”，同时系统对该生能力的认知也会变得更加精准。
-- **Request Body:**
+### 3. 企业录入真实面试反馈
+- **POST** `/enterprise/interviews/{applicationId}/feedback`
+- **Body:**
   ```json
   {
-    "result": "FAIL",
+    "result": "FAIL",        // PASS | FAIL
     "tags": ["八股文背诵痕迹重", "底层原理不懂"],
-    "notes": "问到MySQL索引结构时只会背B+树，无法结合真实业务场景说明。"
+    "notes": "问到MySQL索引结构时无法结合业务说明"
   }
   ```
+- **Response:** 成功返回 `data=null`
 
 ---
 
-## 模块五：管理端 (Admin / LLMOps)
+## 模块五：管理端 (Admin / LLMOps) `/admin`（角色：ADMIN）
 
 ### 1. 获取 AI 异步任务全流程监控列表
 - **GET** `/admin/llmops/tasks`
-- **接口说明:** 
-  供管理员在后台实时查看 RabbitMQ 任务体系的执行情况。返回数据包含当前正在排队、执行中、成功和失败的任务数量，以及各提示词（Prompt）版本的成功率统计，用于质量指标大屏展示。
-
-### 2. 错题本人工纠偏与精准重试 (节省 Token)
-- **POST** `/admin/llmops/tasks/{task_id}/retry`
-- **接口说明:** 
-  当管理员在人工自检中发现 AI 提取字段出错（如置信度低，或把“了解”当成了“精通”）时调用此接口。管理员附带纠偏备注，系统要求大模型**仅重新抽取错误的字段**（通过 `partial_retry_fields` 指定），其余正确的字段直接沿用上次的结果，从而大幅节省大模型的 API Token 算力成本，并实现 AI 质量的持续进化。
-- **Request Body:**
+- **Response:** `LlmTaskStatsResponse`
   ```json
   {
-    "correction_prompt": "注意：不要把熟悉当成精通。仅重新抽取【技能】字段，薪资和学历保持不变。",
-    "partial_retry_fields": ["ai_extracted_skills"]
+    "code": 200,
+    "message": "success",
+    "data": {
+      "queued": 3,
+      "processing": 2,
+      "success": 18,
+      "failed": 1,
+      "tasks": [
+        {
+          "taskId": "task-001",
+          "taskType": "GEN_STUDENT_PROFILE",
+          "targetId": 1,
+          "status": "PROCESSING",
+          "promptVersion": "v1",
+          "errorLog": null,
+          "manualCorrection": null,
+          "createdAt": "2026-03-28T08:00:00",
+          "updatedAt": "2026-03-28T08:05:00"
+        }
+      ]
+    }
   }
   ```
+
+### 2. 错题本人工纠偏与精准重试
+- **POST** `/admin/llmops/tasks/{taskId}/retry`
+- **Body:**
+  ```json
+  {
+    "correctionPrompt": "仅重新抽取【技能】字段，薪资和学历保持不变。",
+    "partialRetryFields": ["ai_extracted_skills"]
+  }
+  ```
+- **Response:** 成功返回 `data=null`

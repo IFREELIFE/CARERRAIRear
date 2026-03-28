@@ -51,6 +51,7 @@
     }
   }
   ```
+  - 说明：`token` 字段与 `accessToken` 等价，保留用于兼容旧版前端。
 
 ### 2. 登录
 - **POST** `/auth/login` （公开）

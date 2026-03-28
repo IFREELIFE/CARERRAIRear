@@ -64,6 +64,17 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse register(RegisterRequest request) {
+        String role = request.getRole();
+        if (role == null || role.isBlank()) {
+            throw new BusinessException("角色不能为空");
+        }
+        role = role.trim().toUpperCase();
+        if (!Constants.ROLE_STUDENT.equals(role)
+                && !Constants.ROLE_SCHOOL.equals(role)
+                && !Constants.ROLE_ENTERPRISE.equals(role)) {
+            throw new BusinessException("不支持的角色类型");
+        }
+
         // Check if email already exists
         Long existingCount = userMapper.selectCount(
                 new QueryWrapper<User>().eq("email", request.getEmail()));
@@ -71,11 +82,9 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("邮箱已被注册");
         }
 
-        String role = request.getRole();
-
         // Validate role-specific requirements
         if (Constants.ROLE_SCHOOL.equals(role)) {
-            String email = request.getEmail();
+            String email = request.getEmail().toLowerCase();
             if (!email.endsWith(".edu") && !email.endsWith(".edu.cn")) {
                 throw new BusinessException("学校账号邮箱必须以 .edu 或 .edu.cn 结尾");
             }
@@ -87,6 +96,11 @@ public class AuthServiceImpl implements AuthService {
             }
             if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
                 throw new BusinessException("企业注册需要公司名称");
+            }
+            Long existingEnterprise = enterpriseMapper.selectCount(
+                    new QueryWrapper<Enterprise>().eq("credit_code", request.getCreditCode()));
+            if (existingEnterprise > 0) {
+                throw new BusinessException("该统一社会信用代码已注册");
             }
         }
 
